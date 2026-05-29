@@ -1,0 +1,29 @@
+{
+  "name": "aegis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Verifiable DeFi/RWA crisis-response guardian. On-chain risk scoring + exit decisions in Arbitrum Stylus; bounded, non-custodial execution.",
+  "license": "MIT",
+  "author": "Godswill Idolor Eseteru (big14way)",
+  "workspaces": [
+    "packages/agent",
+    "packages/web"
+  ],
+  "scripts": {
+    "agent": "npm --workspace @aegis/agent run start",
+    "agent:dev": "npm --workspace @aegis/agent run dev",
+    "web": "npm --workspace @aegis/web run dev",
+    "web:build": "npm --workspace @aegis/web run build",
+    "typecheck": "npm --workspace @aegis/agent run typecheck && npm --workspace @aegis/web run typecheck"
+  },
+  "keywords": [
+    "arbitrum",
+    "stylus",
+    "defi",
+    "rwa",
+    "ai-agent",
+    "security",
+    "erc-8004",
+    "x402"
+  ]
+}

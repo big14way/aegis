@@ -1,0 +1,6 @@
+# Pin a stable toolchain known to work with stylus-sdk 0.10.0.
+# (Only `openzeppelin-stylus` would require nightly; Aegis does not use it.)
+[toolchain]
+channel = "1.88"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

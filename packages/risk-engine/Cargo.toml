@@ -1,0 +1,39 @@
+[package]
+name = "aegis-risk-engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Aegis verifiable risk-scoring + exit-trigger engine (Arbitrum Stylus)"
+repository = "https://github.com/big14way/aegis"
+keywords = ["arbitrum", "stylus", "defi", "agent", "security"]
+
+[dependencies]
+# Pinned to the current stable Stylus SDK (released 2026-01-08).
+# stylus-sdk re-exports alloy-primitives and alloy-sol-types, so we depend on
+# the SDK alone to avoid any version skew between alloy and the SDK.
+stylus-sdk = "=0.10.0"
+
+[dev-dependencies]
+# TestVM (stylus_sdk::testing) is bundled with the SDK; no extra dev-deps needed.
+
+[features]
+# Enables `cargo stylus export-abi` (prints the Solidity ABI for the executor).
+export-abi = ["stylus-sdk/export-abi"]
+
+[lib]
+# "lib" is needed for `cargo test` (host build); "cdylib" for the WASM artifact.
+crate-type = ["lib", "cdylib"]
+
+# Release profile tuned for the 24 KB Brotli-compressed on-chain size limit.
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+opt-level = "s"
+overflow-checks = false
+
+# Keep debug builds (and `cargo test`) fast and with overflow checks on so the
+# scoring math is validated against accidental overflow during development.
+[profile.dev]
+overflow-checks = true
