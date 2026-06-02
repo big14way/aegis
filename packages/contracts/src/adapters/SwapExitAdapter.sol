@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IExitAdapter} from "../interfaces/IExitAdapter.sol";
 import {ISwapRouter, ExactInputSingleParams} from "../interfaces/ISwapRouter.sol";
 
@@ -16,16 +17,16 @@ import {ISwapRouter, ExactInputSingleParams} from "../interfaces/ISwapRouter.sol
 /// @dev    On Robinhood Chain testnet no canonical DEX is confirmed yet, so the
 ///         router address is configurable; point it at a live router on Arbitrum
 ///         Sepolia, or at MockSwapRouter for deterministic local end-to-end runs.
-contract SwapExitAdapter is IExitAdapter, Ownable {
+contract SwapExitAdapter is IExitAdapter, Ownable2Step {
     using SafeERC20 for IERC20;
 
     ISwapRouter public router;
     uint24 public poolFee = 3000; // 0.30% default tier
-    uint256 public slippageBps = 100; // 1.00% max slippage guard (owner-tunable)
 
     event RouterUpdated(address indexed router);
     event PoolFeeUpdated(uint24 fee);
-    event SlippageUpdated(uint256 bps);
+
+    error InsufficientOutput(uint256 proceeds, uint256 minOut);
 
     constructor(address router_, address admin) Ownable(admin) {
         router = ISwapRouter(router_);
@@ -41,34 +42,35 @@ contract SwapExitAdapter is IExitAdapter, Ownable {
         emit PoolFeeUpdated(fee);
     }
 
-    function setSlippageBps(uint256 bps) external onlyOwner {
-        require(bps <= 10_000, "bps");
-        slippageBps = bps;
-        emit SlippageUpdated(bps);
-    }
-
     /// @inheritdoc IExitAdapter
-    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary)
+    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary, uint256 minOut)
         external
         override
         returns (uint256 proceeds)
     {
+        // Measure what actually arrives so a fee-on-transfer source can't desync
+        // the amount swapped against the approval.
+        uint256 balBefore = IERC20(sourceAsset).balanceOf(address(this));
         IERC20(sourceAsset).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(sourceAsset).forceApprove(address(router), amount);
+        uint256 received = IERC20(sourceAsset).balanceOf(address(this)) - balBefore;
+        IERC20(sourceAsset).forceApprove(address(router), received);
 
-        // amountOutMinimum is left to a price-aware caller in production; for the
-        // crisis path we accept the slippage guard since exiting beats holding.
+        // Enforce the caller-supplied slippage floor on-chain via the router AND
+        // re-check the returned proceeds (defense in depth). A crisis exit still
+        // beats holding, but giving 100% of slippage to MEV is not acceptable —
+        // the keeper passes a price-aware `minOut` (0 only for trusted/mock routes).
         ExactInputSingleParams memory params = ExactInputSingleParams({
             tokenIn: sourceAsset,
             tokenOut: targetAsset,
             fee: poolFee,
             recipient: beneficiary,
-            amountIn: amount,
-            amountOutMinimum: 0,
+            amountIn: received,
+            amountOutMinimum: minOut,
             sqrtPriceLimitX96: 0
         });
         proceeds = router.exactInputSingle(params);
         IERC20(sourceAsset).forceApprove(address(router), 0);
+        if (proceeds < minOut) revert InsufficientOutput(proceeds, minOut);
         return proceeds;
     }
 

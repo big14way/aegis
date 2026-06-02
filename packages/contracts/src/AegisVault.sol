@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {AccessControlDefaultAdminRules} from
+    "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -26,7 +27,7 @@ import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 ///         the user's cap, only into the user's chosen asset, and only through an
 ///         owner-allow-listed adapter. The judgement is on-chain and verifiable;
 ///         the executor is dumb and tightly bounded by design.
-contract AegisVault is AccessControl, ReentrancyGuard {
+contract AegisVault is AccessControlDefaultAdminRules, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
@@ -56,23 +57,31 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     uint256 public agentId;
     /// @notice Chainlink L2 sequencer uptime feed (0 to disable the check).
     address public sequencerUptimeFeed;
+    /// @notice Max age (secs) a price-feed answer may have in `checkOracle`
+    ///         (0 disables the staleness check). Owner-tunable.
+    uint256 public maxFeedAge = 3600;
 
     /// @notice user => guard config.
     mapping(address => Guard) public guards;
     /// @notice user => T2 confirmation-window expiry timestamp (0 if none open).
     mapping(address => uint256) public pendingUntil;
+    /// @notice user => risk score (bps) captured when the T2 window opened, so a
+    ///         confirmed exit reports the real score (not 0) in its `Exited` event.
+    mapping(address => uint256) public pendingScoreBps;
     /// @notice adapter => allow-listed flag.
     mapping(address => bool) public allowedAdapters;
 
     event EngineUpdated(address indexed engine);
     event AgentIdUpdated(uint256 indexed agentId);
     event SequencerFeedUpdated(address indexed feed);
+    event MaxFeedAgeUpdated(uint256 maxFeedAge);
     event AdapterAllowed(address indexed adapter, bool allowed);
     event Armed(address indexed user, address sourceAsset, address targetAsset, address adapter, uint256 maxExitAmount, uint64 t2WindowSecs);
     event Disarmed(address indexed user);
     event Evaluated(address indexed user, uint256 scoreBps, uint8 tier, bool exitFlag);
     event Alert(address indexed user, uint256 scoreBps);
     event ConfirmationRequested(address indexed user, uint256 scoreBps, uint256 windowExpiry);
+    event ExitConfirmed(address indexed user, uint256 scoreBps);
     event Exited(
         address indexed user,
         address indexed adapter,
@@ -91,10 +100,13 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     error NotAuthorized();
     error NoOpenWindow();
     error ZeroAddress();
+    error InsufficientProceeds(uint256 proceeds, uint256 minOut);
 
-    constructor(address admin, address engine_) {
-        if (admin == address(0)) revert ZeroAddress();
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+    /// @param admin   the initial default admin. Handover is 2-step + time-delayed
+    ///                via AccessControlDefaultAdminRules so it cannot be fat-fingered.
+    /// @param engine_ the verifiable risk engine (Stylus in prod, LocalRiskEngine on plain EVM).
+    constructor(address admin, address engine_) AccessControlDefaultAdminRules(3 days, admin) {
+        if (engine_ == address(0)) revert ZeroAddress();
         _grantRole(KEEPER_ROLE, admin); // admin can keep until a session key is delegated
         engine = IRiskEngine(engine_);
         emit EngineUpdated(engine_);
@@ -117,6 +129,12 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     function setSequencerFeed(address feed) external onlyRole(DEFAULT_ADMIN_ROLE) {
         sequencerUptimeFeed = feed;
         emit SequencerFeedUpdated(feed);
+    }
+
+    /// @notice Set the max acceptable age (secs) of a price-feed answer (0 disables).
+    function setMaxFeedAge(uint256 maxAge) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        maxFeedAge = maxAge;
+        emit MaxFeedAgeUpdated(maxAge);
     }
 
     function setAdapterAllowed(address adapter, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -155,6 +173,7 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     function disarm() external {
         delete guards[msg.sender];
         delete pendingUntil[msg.sender];
+        delete pendingScoreBps[msg.sender];
         emit Disarmed(msg.sender);
     }
 
@@ -163,6 +182,9 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     /// @notice Keeper entrypoint. Asks the engine for a verdict and acts on it.
     ///         Calls `engine.evaluate` (not the view) so the decision is logged
     ///         on-chain by the engine itself. Funds move only on an auto-fire.
+    /// @param  minOut Slippage floor forwarded to the exit adapter; the keeper
+    ///         supplies a price-aware value so the crisis swap cannot be
+    ///         sandwiched to near-zero. `0` disables the floor (mock/trusted routes).
     /// @return tier the engine's response tier (0..3)
     function evaluateAndExit(
         address user,
@@ -170,7 +192,8 @@ contract AegisVault is AccessControl, ReentrancyGuard {
         uint8[] calldata classes,
         uint256[] calldata severitiesBps,
         uint256[] calldata confidencesBps,
-        uint256[] calldata agesSecs
+        uint256[] calldata agesSecs,
+        uint256 minOut
     ) external onlyRole(KEEPER_ROLE) nonReentrant returns (uint8 tier) {
         if (address(engine) == address(0)) revert EngineNotSet();
         Guard memory g = guards[user];
@@ -183,10 +206,11 @@ contract AegisVault is AccessControl, ReentrancyGuard {
         emit Evaluated(user, scoreBps, tier, exitFlag);
 
         if (exitFlag) {
-            _executeExit(user, g, scoreBps);
+            _executeExit(user, g, scoreBps, minOut);
         } else if (tier == TIER_CONFIRM) {
             uint256 windowExpiry = block.timestamp + g.t2WindowSecs;
             pendingUntil[user] = windowExpiry;
+            pendingScoreBps[user] = scoreBps;
             emit ConfirmationRequested(user, scoreBps, windowExpiry);
         } else if (tier == TIER_ALERT) {
             emit Alert(user, scoreBps);
@@ -197,14 +221,18 @@ contract AegisVault is AccessControl, ReentrancyGuard {
     /// @notice Confirm a pending T2 exit within its window. Callable by the
     ///         protected user themselves, or by the keeper acting on a user
     ///         confirmation relayed off-chain.
-    function confirmExit(address user) external nonReentrant {
+    /// @param  minOut Slippage floor forwarded to the exit adapter (0 = no floor).
+    function confirmExit(address user, uint256 minOut) external nonReentrant {
         if (msg.sender != user && !hasRole(KEEPER_ROLE, msg.sender)) revert NotAuthorized();
         uint256 until = pendingUntil[user];
         if (until == 0 || block.timestamp > until) revert NoOpenWindow();
         Guard memory g = guards[user];
         if (!g.armed) revert NotArmed();
+        uint256 scoreBps = pendingScoreBps[user];
         delete pendingUntil[user];
-        _executeExit(user, g, 0);
+        delete pendingScoreBps[user];
+        emit ExitConfirmed(user, scoreBps);
+        _executeExit(user, g, scoreBps, minOut);
     }
 
     // ------------------------- oracle interop -----------------------------
@@ -224,14 +252,17 @@ contract AegisVault is AccessControl, ReentrancyGuard {
             require(up == 0, "Aegis: sequencer down");
             require(block.timestamp - startedAt > SEQUENCER_GRACE_PERIOD, "Aegis: grace period");
         }
-        (, int256 answer,,,) = IAggregatorV3(feed).latestRoundData();
+        (, int256 answer,, uint256 updatedAt,) = IAggregatorV3(feed).latestRoundData();
         require(answer > 0, "Aegis: bad price");
+        if (maxFeedAge != 0) {
+            require(block.timestamp - updatedAt <= maxFeedAge, "Aegis: stale price");
+        }
         return engine.deviationBps(uint256(answer), expectedPrice);
     }
 
     // ------------------------------ internal ------------------------------
 
-    function _executeExit(address user, Guard memory g, uint256 scoreBps) internal {
+    function _executeExit(address user, Guard memory g, uint256 scoreBps, uint256 minOut) internal {
         if (!allowedAdapters[g.adapter]) revert AdapterNotAllowed();
 
         // Determine the bounded amount: min(approved, balance, cap).
@@ -241,15 +272,22 @@ contract AegisVault is AccessControl, ReentrancyGuard {
         if (amount > g.maxExitAmount) amount = g.maxExitAmount;
         if (amount == 0) revert NothingToExit();
 
-        // Pull exactly the bounded amount (non-custodial: never more than approved).
+        // Pull the bounded amount and measure what actually arrived, so a
+        // fee-on-transfer source asset can't desync the vault's accounting.
+        uint256 balBefore = IERC20(g.sourceAsset).balanceOf(address(this));
         IERC20(g.sourceAsset).safeTransferFrom(user, address(this), amount);
+        uint256 received = IERC20(g.sourceAsset).balanceOf(address(this)) - balBefore;
+        if (received == 0) revert NothingToExit();
 
         // Hand off to the protocol-specific adapter; proceeds go straight to user.
-        IERC20(g.sourceAsset).forceApprove(g.adapter, amount);
-        uint256 proceeds = IExitAdapter(g.adapter).exit(g.sourceAsset, amount, g.targetAsset, user);
+        // Forward exactly what we received; the slippage floor is enforced inside
+        // the adapter AND re-checked here.
+        IERC20(g.sourceAsset).forceApprove(g.adapter, received);
+        uint256 proceeds = IExitAdapter(g.adapter).exit(g.sourceAsset, received, g.targetAsset, user, minOut);
         IERC20(g.sourceAsset).forceApprove(g.adapter, 0);
+        if (proceeds < minOut) revert InsufficientProceeds(proceeds, minOut);
 
-        emit Exited(user, g.adapter, g.sourceAsset, amount, g.targetAsset, proceeds, scoreBps, agentId);
+        emit Exited(user, g.adapter, g.sourceAsset, received, g.targetAsset, proceeds, scoreBps, agentId);
     }
 
     // ------------------------------ views ---------------------------------

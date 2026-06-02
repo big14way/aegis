@@ -215,9 +215,6 @@ pub fn compute_score(signals: &[Signal], cfg: &ScoringConfig) -> ScoreResult {
         } else {
             0
         };
-        if source_idx < 32 {
-            class_source_mask[class_idx] |= 1u32 << source_idx;
-        }
 
         let severity = clamp_bps(s.severity_bps);
         let confidence = clamp_bps(s.confidence_bps);
@@ -230,6 +227,14 @@ pub fn compute_score(signals: &[Signal], cfg: &ScoringConfig) -> ScoreResult {
         contribution = (contribution * source_weight) / BPS;
         contribution = (contribution * class_weight) / BPS;
         contribution = (contribution * decay) / BPS;
+
+        // Only a signal that actually contributes evidence counts toward the
+        // distinct-source corroboration set. A zero-weight / unconfigured source
+        // (or a fully-decayed signal) contributes nothing and must NOT be able to
+        // flip a corroboration bit and forge a x1.5 bonus / auto-fire.
+        if contribution > 0 && source_idx < 32 {
+            class_source_mask[class_idx] |= 1u32 << source_idx;
+        }
 
         class_aggregate[class_idx] = class_aggregate[class_idx].saturating_add(contribution);
     }
@@ -287,6 +292,23 @@ mod tests {
     }
 
     #[test]
+    fn zzz_verify_zero_weight_corroboration() {
+        let cfg = ScoringConfig::default_config();
+        let one = compute_score(&[sig(0, class::BRIDGE_VERIFIER, 6_000, 6_000, 0)], &cfg);
+        std::println!("ONE: score={} tier={:?} exit={}", one.score_bps, one.tier as u8, one.exit_flag);
+        let two = compute_score(
+            &[
+                sig(0, class::BRIDGE_VERIFIER, 6_000, 6_000, 0),
+                sig(10, class::BRIDGE_VERIFIER, 9_000, 9_000, 0),
+            ],
+            &cfg,
+        );
+        std::println!("TWO: score={} tier={:?} exit={}", two.score_bps, two.tier as u8, two.exit_flag);
+        assert!(!one.exit_flag, "single signal should NOT fire");
+        assert!(two.exit_flag, "junk zero-weight source flips exit to true");
+    }
+
+    #[test]
     fn empty_signals_yield_none() {
         let cfg = ScoringConfig::default_config();
         let r = compute_score(&[], &cfg);
@@ -334,6 +356,28 @@ mod tests {
             &cfg,
         );
         assert!(dup.score_bps < two.score_bps);
+    }
+
+    #[test]
+    fn zero_weight_source_cannot_forge_corroboration() {
+        let cfg = ScoringConfig::default_config();
+        // Source 0 (Forta, weighted) plus source 9 (unconfigured -> weight 0).
+        // The zero-weight source contributes nothing, so the class must be seen
+        // from only ONE effective distinct source: no x1.5 bonus, no auto-fire.
+        let forged = compute_score(
+            &[
+                sig(0, class::BRIDGE_VERIFIER, 8_000, 8_000, 0),
+                sig(9, class::BRIDGE_VERIFIER, 8_000, 8_000, 0),
+            ],
+            &cfg,
+        );
+        let lone = compute_score(&[sig(0, class::BRIDGE_VERIFIER, 8_000, 8_000, 0)], &cfg);
+        assert_eq!(
+            forged.score_bps, lone.score_bps,
+            "an unweighted source must not change the score"
+        );
+        assert!(!forged.exit_flag, "zero-weight source must not force auto-fire");
+        assert_ne!(forged.tier, Tier::AutoFire);
     }
 
     #[test]

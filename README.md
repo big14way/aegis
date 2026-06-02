@@ -130,6 +130,20 @@ cd packages/web && npm install && npm run dev   # http://localhost:3000
 Arm the guardian and inject a threat scenario — the gauge is driven by a faithful
 mirror of the on-chain scoring, so every number matches the Stylus engine.
 
+### Run it fully on-chain (local — no Stylus toolchain needed)
+
+```bash
+npm install
+npm run deploy:local   # anvil + deploy LocalRiskEngine + vault + adapters, writes env
+npm run web            # http://localhost:3000 — LIVE mode, reads score() from the chain
+```
+
+`LocalRiskEngine` (Solidity) runs the **real** scoring algorithm on-chain and
+exposes the **identical `IRiskEngine` ABI** as the Stylus engine, so the dashboard
+reads live on-chain verdicts and the keeper fires a bounded exit for real. To swap
+in the production Arbitrum Stylus engine it's a one-line address change — see
+[`docs/STYLUS_ACTIVATION.md`](./docs/STYLUS_ACTIVATION.md).
+
 Full end-to-end (Stylus + Foundry + agent + web) is in
 [`docs/LOCAL_SETUP.md`](./docs/LOCAL_SETUP.md). Verify the scoring core right now
 with zero setup:
@@ -157,11 +171,16 @@ cd packages/risk-engine && cargo test
 
 ## What's verified in this repo
 
-- ✅ **Scoring core** — pure-Rust unit tests (`cargo test`), no Stylus toolchain needed.
+- ✅ **Contracts** — `forge test` (24 tests): bounded exits, the slippage floor,
+  oracle staleness + sequencer guard, two-step admin, fee-on-transfer accounting,
+  and Rust↔Solidity scoring parity (shared `ScoringLib`).
+- ✅ **On-chain MVP** — `npm run deploy:local` deploys `LocalRiskEngine` + vault +
+  adapters to anvil; the dashboard reads `score()` and fires bounded exits on-chain.
+- ✅ **Web** — `npm run build` + LIVE wiring (on-chain reads, event subscription, receipts).
 - ✅ **Agent** — `tsc --noEmit` clean.
-- ✅ **Web** — `npm run build`.
-- 🔧 **Stylus engine** — compiles/deploys with Rust 1.88 + cargo-stylus + Docker (see LOCAL_SETUP).
-- 🔧 **Contracts** — `forge test` after `forge install forge-std openzeppelin-contracts`.
+- ✅ **Scoring core** — pure-Rust unit tests (`cargo test`), no Stylus toolchain needed.
+- 🔧 **Stylus engine** — Rust 1.88 + cargo-stylus + Docker; activate with a one-line
+  address swap via [`docs/STYLUS_ACTIVATION.md`](./docs/STYLUS_ACTIVATION.md).
 
 ## License
 

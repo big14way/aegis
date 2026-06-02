@@ -90,6 +90,43 @@ contract GasBenchTest is Test {
         assertFalse(flag);
     }
 
+    function test_Parity_ZeroWeightSourceCannotForgeCorroboration() public view {
+        // Source 0 (Forta, weighted) + source 9 (unconfigured -> weight 0) on the
+        // bridge-verifier auto-fire class. The unweighted source contributes
+        // nothing, so it must NOT count as a second distinct source: no x1.5
+        // bonus and no forged auto-fire. Result must equal the lone-signal case.
+        uint8[] memory s2 = new uint8[](2);
+        uint8[] memory c2 = new uint8[](2);
+        uint256[] memory sev2 = new uint256[](2);
+        uint256[] memory conf2 = new uint256[](2);
+        uint256[] memory age2 = new uint256[](2);
+        s2[0] = 0;
+        s2[1] = 9; // unconfigured source -> weight 0
+        c2[0] = 3;
+        c2[1] = 3; // BridgeVerifier
+        sev2[0] = 8_000;
+        sev2[1] = 8_000;
+        conf2[0] = 8_000;
+        conf2[1] = 8_000;
+        (uint256 forgedScore, uint8 forgedTier, bool forgedFlag) = scorer.score(s2, c2, sev2, conf2, age2);
+
+        uint8[] memory s1 = new uint8[](1);
+        uint8[] memory c1 = new uint8[](1);
+        uint256[] memory sev1 = new uint256[](1);
+        uint256[] memory conf1 = new uint256[](1);
+        uint256[] memory age1 = new uint256[](1);
+        s1[0] = 0;
+        c1[0] = 3;
+        sev1[0] = 8_000;
+        conf1[0] = 8_000;
+        (uint256 loneScore,, bool loneFlag) = scorer.score(s1, c1, sev1, conf1, age1);
+
+        assertEq(forgedScore, loneScore, "unweighted source must not change the score");
+        assertFalse(forgedFlag, "zero-weight source must not force auto-fire");
+        assertFalse(loneFlag);
+        assertEq(forgedTier, 2, "single effective bridge-verifier signal -> confirm, not auto-fire");
+    }
+
     function test_Parity_StaleSignalDoesNotFire() public view {
         uint8[] memory s = new uint8[](1);
         uint8[] memory c = new uint8[](1);

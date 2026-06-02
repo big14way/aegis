@@ -240,7 +240,7 @@ impl RiskEngine {
 
     /// Ratchet the global threat-environment multiplier up or down (bps).
     pub fn set_threat_multiplier(&mut self, value_bps: U256) -> Result<(), AegisError> {
-        self.only_owner()?;
+        self.only_owner_when_active()?;
         self.threat_multiplier_bps.set(value_bps);
         self.emit_config_updated();
         Ok(())
@@ -248,7 +248,7 @@ impl RiskEngine {
 
     /// Update the T3/T2 score thresholds (bps). Requires `t3 >= t2`.
     pub fn set_thresholds(&mut self, t3_bps: U256, t2_bps: U256) -> Result<(), AegisError> {
-        self.only_owner()?;
+        self.only_owner_when_active()?;
         if t3_bps < t2_bps {
             return Err(AegisError::InvalidThresholds(InvalidThresholds {}));
         }
@@ -259,7 +259,7 @@ impl RiskEngine {
     }
 
     pub fn set_class_weight(&mut self, class_id: U256, weight_bps: U256) -> Result<(), AegisError> {
-        self.only_owner()?;
+        self.only_owner_when_active()?;
         self.class_weight_bps.setter(class_id).set(weight_bps);
         self.emit_config_updated();
         Ok(())
@@ -270,7 +270,7 @@ impl RiskEngine {
         source_id: U256,
         weight_bps: U256,
     ) -> Result<(), AegisError> {
-        self.only_owner()?;
+        self.only_owner_when_active()?;
         self.source_weight_bps.setter(source_id).set(weight_bps);
         if source_id >= self.source_count.get() {
             self.source_count.set(source_id + U256::from(1));
@@ -284,7 +284,7 @@ impl RiskEngine {
         class_id: U256,
         enabled: bool,
     ) -> Result<(), AegisError> {
-        self.only_owner()?;
+        self.only_owner_when_active()?;
         self.auto_fire_class.setter(class_id).set(enabled);
         self.emit_config_updated();
         Ok(())
@@ -305,11 +305,22 @@ impl RiskEngine {
 }
 
 impl RiskEngine {
-    /// Internal: assert the caller is the owner.
+    /// Internal: assert the caller is the owner (independent of pause state).
+    /// Pause and ownership controls use this guard so that a paused engine can
+    /// always be unpaused or handed over — config mutators use
+    /// `only_owner_when_active` instead.
     fn only_owner(&self) -> Result<(), AegisError> {
         if self.vm().msg_sender() != self.owner.get() {
             return Err(AegisError::NotOwner(NotOwner {}));
         }
+        Ok(())
+    }
+
+    /// Internal: owner-only AND not paused. Used by every scoring-config mutator
+    /// so that pausing freezes configuration without ever locking out the
+    /// owner's ability to unpause (`set_paused`) or transfer ownership.
+    fn only_owner_when_active(&self) -> Result<(), AegisError> {
+        self.only_owner()?;
         if self.paused.get() {
             return Err(AegisError::Paused(Paused {}));
         }

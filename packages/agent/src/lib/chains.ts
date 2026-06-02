@@ -25,7 +25,16 @@ export const robinhoodTestnet = defineChain({
 
 export { arbitrumSepolia };
 
-export type SupportedChain = typeof robinhoodTestnet | typeof arbitrumSepolia;
+/** Local anvil / Nitro devnode (chain id 31337) for the on-chain local stack. */
+export const anvilLocal = defineChain({
+  id: 31337,
+  name: "Anvil (local)",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["http://127.0.0.1:8545"] } },
+  testnet: true,
+});
+
+export type SupportedChain = typeof robinhoodTestnet | typeof arbitrumSepolia | typeof anvilLocal;
 
 /** Resolve a viem chain object from a numeric chain id. */
 export function chainFromId(id: number): SupportedChain {
@@ -34,6 +43,8 @@ export function chainFromId(id: number): SupportedChain {
       return robinhoodTestnet;
     case arbitrumSepolia.id:
       return arbitrumSepolia;
+    case anvilLocal.id:
+      return anvilLocal;
     default:
       throw new Error(`Unsupported chain id ${id}`);
   }

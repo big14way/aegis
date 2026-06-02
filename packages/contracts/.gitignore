@@ -1,5 +1,6 @@
 cache/
 out/
 broadcast/
-lib/
+/lib/
+deployments/
 .env

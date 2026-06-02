@@ -6,6 +6,7 @@ import {AegisVault} from "../src/AegisVault.sol";
 import {MockRiskEngine} from "../src/mocks/MockRiskEngine.sol";
 import {MockExitAdapter} from "../src/mocks/MockExitAdapter.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MockFeeERC20} from "../src/mocks/MockFeeERC20.sol";
 import {MockAggregatorV3} from "../src/mocks/MockAggregatorV3.sol";
 
 contract AegisVaultTest is Test {
@@ -68,7 +69,7 @@ contract AegisVaultTest is Test {
         (uint8[] memory s, uint8[] memory c, uint256[] memory sev, uint256[] memory conf, uint256[] memory age) =
             _signals();
         vm.prank(keeper);
-        return vault.evaluateAndExit(user, s, c, sev, conf, age);
+        return vault.evaluateAndExit(user, s, c, sev, conf, age, 0);
     }
 
     // ------------------------------ tests ---------------------------------
@@ -106,7 +107,7 @@ contract AegisVaultTest is Test {
 
         // User confirms within the window -> bounded exit fires.
         vm.prank(user);
-        vault.confirmExit(user);
+        vault.confirmExit(user, 0);
         assertEq(target.balanceOf(user), CAP, "exit fires on confirm");
         assertFalse(vault.isWindowOpen(user), "window cleared after confirm");
     }
@@ -118,7 +119,7 @@ contract AegisVaultTest is Test {
         vm.warp(block.timestamp + WINDOW + 1);
         vm.prank(user);
         vm.expectRevert(AegisVault.NoOpenWindow.selector);
-        vault.confirmExit(user);
+        vault.confirmExit(user, 0);
     }
 
     function test_Bound_CapIsEnforcedWhenBalanceLarger() public {
@@ -139,13 +140,83 @@ contract AegisVaultTest is Test {
         assertEq(source.balanceOf(user), 0, "source fully unwound");
     }
 
+    function test_Exit_RevertsBelowMinOut() public {
+        engine.setDecision(8_200, 3, true);
+        (uint8[] memory s, uint8[] memory c, uint256[] memory sev, uint256[] memory conf, uint256[] memory age) =
+            _signals();
+        // MockExitAdapter returns proceeds == amount (== CAP). A minOut above that
+        // must revert the bounded exit, proving the slippage floor is enforced.
+        vm.prank(keeper);
+        vm.expectRevert(bytes("Mock: insufficient output"));
+        vault.evaluateAndExit(user, s, c, sev, conf, age, CAP + 1);
+        assertEq(target.balanceOf(user), 0, "no proceeds when floor not met");
+    }
+
+    function test_Exit_SucceedsAtExactMinOut() public {
+        engine.setDecision(8_200, 3, true);
+        (uint8[] memory s, uint8[] memory c, uint256[] memory sev, uint256[] memory conf, uint256[] memory age) =
+            _signals();
+        vm.prank(keeper);
+        uint8 tier = vault.evaluateAndExit(user, s, c, sev, conf, age, CAP); // proceeds == minOut == CAP
+        assertEq(tier, 3);
+        assertEq(target.balanceOf(user), CAP, "exit fires when proceeds meet the floor");
+    }
+
+    // --------------------------- hardening --------------------------------
+
+    function test_Constructor_RevertsZeroEngine() public {
+        vm.expectRevert(AegisVault.ZeroAddress.selector);
+        new AegisVault(admin, address(0));
+    }
+
+    function test_CheckOracle_RevertsWhenStale() public {
+        MockAggregatorV3 sequencer = new MockAggregatorV3(0, 0);
+        sequencer.setStartedAt(1);
+        vault.setSequencerFeed(address(sequencer));
+        vm.warp(block.timestamp + vault.SEQUENCER_GRACE_PERIOD() + 1);
+
+        MockAggregatorV3 feed = new MockAggregatorV3(1_900e8, 8);
+        feed.setUpdatedAt(1); // answer last updated at t=1 -> older than maxFeedAge
+        vm.expectRevert(bytes("Aegis: stale price"));
+        vault.checkOracle(address(feed), 2_000e8);
+    }
+
+    function test_Confirm_EmitsExitConfirmedWithScore() public {
+        engine.setDecision(5_500, 2, false);
+        _evaluate();
+        vm.expectEmit(true, false, false, true, address(vault));
+        emit AegisVault.ExitConfirmed(user, 5_500);
+        vm.prank(user);
+        vault.confirmExit(user, 0);
+    }
+
+    function test_Exit_HandlesFeeOnTransferSource() public {
+        // 1% fee-on-transfer source: the vault must forward what it actually
+        // received, not the requested amount, and must not revert.
+        MockFeeERC20 feeSrc = new MockFeeERC20("Fee tTSLA", "ftTSLA", 100);
+        feeSrc.mint(user, 5_000e18);
+        vm.startPrank(user);
+        feeSrc.approve(address(vault), type(uint256).max);
+        vault.arm(address(feeSrc), address(target), address(adapter), CAP, WINDOW);
+        vm.stopPrank();
+
+        engine.setDecision(8_200, 3, true);
+        (uint8[] memory s, uint8[] memory c, uint256[] memory sev, uint256[] memory conf, uint256[] memory age) =
+            _signals();
+        vm.prank(keeper);
+        vault.evaluateAndExit(user, s, c, sev, conf, age, 0);
+
+        uint256 received = CAP - (CAP * 100) / 10_000; // 990e18 after the 1% fee
+        assertEq(target.balanceOf(user), received, "user receives the actually-moved amount");
+    }
+
     function test_OnlyKeeper_CanEvaluate() public {
         engine.setDecision(9_000, 3, true);
         (uint8[] memory s, uint8[] memory c, uint256[] memory sev, uint256[] memory conf, uint256[] memory age) =
             _signals();
         vm.prank(user); // not a keeper
         vm.expectRevert();
-        vault.evaluateAndExit(user, s, c, sev, conf, age);
+        vault.evaluateAndExit(user, s, c, sev, conf, age, 0);
     }
 
     function test_NotArmed_Reverts() public {
@@ -155,7 +226,7 @@ contract AegisVaultTest is Test {
             _signals();
         vm.prank(keeper);
         vm.expectRevert(AegisVault.NotArmed.selector);
-        vault.evaluateAndExit(stranger, s, c, sev, conf, age);
+        vault.evaluateAndExit(stranger, s, c, sev, conf, age, 0);
     }
 
     function test_Arm_RevertsForDisallowedAdapter() public {
@@ -183,6 +254,10 @@ contract AegisVaultTest is Test {
         MockAggregatorV3 sequencer = new MockAggregatorV3(0, 0);
         sequencer.setStartedAt(1);
         vault.setSequencerFeed(address(sequencer));
+
+        // Foundry starts block.timestamp at 1, so advance past the sequencer
+        // grace period before the deviation read is allowed.
+        vm.warp(block.timestamp + vault.SEQUENCER_GRACE_PERIOD() + 1);
 
         // Feed reports 1900e8 vs an expected 2000e8 -> 5% deviation = 500 bps.
         MockAggregatorV3 feed = new MockAggregatorV3(1_900e8, 8);

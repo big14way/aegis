@@ -27,8 +27,17 @@ export class ExecutorClient {
     this.publicClient = createPublicClient({ chain, transport });
   }
 
-  /** Submit the verdict on-chain; the vault re-derives it and acts within bounds. */
-  async evaluateAndExit(user: `0x${string}`, signals: EncodedSignals): Promise<`0x${string}`> {
+  /**
+   * Submit the verdict on-chain; the vault re-derives it and acts within bounds.
+   * `minOut` is the slippage floor forwarded to the exit adapter — a price-aware
+   * keeper should compute it from the bounded amount and a fair quote; `0n`
+   * disables the floor (acceptable only for trusted/mock swap routes).
+   */
+  async evaluateAndExit(
+    user: `0x${string}`,
+    signals: EncodedSignals,
+    minOut: bigint = 0n,
+  ): Promise<`0x${string}`> {
     const hash = await this.wallet.writeContract({
       address: this.vault,
       abi: aegisVaultAbi,
@@ -40,18 +49,19 @@ export class ExecutorClient {
         signals.severitiesBps,
         signals.confidencesBps,
         signals.agesSecs,
+        minOut,
       ],
     });
     await this.publicClient.waitForTransactionReceipt({ hash });
     return hash;
   }
 
-  async confirmExit(user: `0x${string}`): Promise<`0x${string}`> {
+  async confirmExit(user: `0x${string}`, minOut: bigint = 0n): Promise<`0x${string}`> {
     const hash = await this.wallet.writeContract({
       address: this.vault,
       abi: aegisVaultAbi,
       functionName: "confirmExit",
-      args: [user],
+      args: [user, minOut],
     });
     await this.publicClient.waitForTransactionReceipt({ hash });
     return hash;

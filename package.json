@@ -10,6 +10,7 @@
     "packages/web"
   ],
   "scripts": {
+    "deploy:local": "bash scripts/deploy-local.sh",
     "agent": "npm --workspace @aegis/agent run start",
     "agent:dev": "npm --workspace @aegis/agent run dev",
     "web": "npm --workspace @aegis/web run dev",

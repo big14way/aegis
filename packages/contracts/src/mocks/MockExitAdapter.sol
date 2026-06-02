@@ -13,13 +13,14 @@ import {MockERC20} from "./MockERC20.sol";
 contract MockExitAdapter is IExitAdapter {
     using SafeERC20 for IERC20;
 
-    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary)
+    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary, uint256 minOut)
         external
         override
         returns (uint256 proceeds)
     {
         IERC20(sourceAsset).safeTransferFrom(msg.sender, address(this), amount);
-        proceeds = amount;
+        proceeds = amount; // deterministic 1:1 for local demos
+        require(proceeds >= minOut, "Mock: insufficient output");
         MockERC20(targetAsset).mint(beneficiary, proceeds);
         return proceeds;
     }

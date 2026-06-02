@@ -13,4 +13,13 @@ export const robinhoodTestnet = defineChain({
   testnet: true,
 });
 
+/** Local anvil / Nitro devnode (chain id 31337) for the on-chain LIVE demo. */
+export const anvil = defineChain({
+  id: 31337,
+  name: "Anvil (local)",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: ["http://127.0.0.1:8545"] } },
+  testnet: true,
+});
+
 export { arbitrumSepolia };

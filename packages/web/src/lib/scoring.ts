@@ -75,12 +75,15 @@ export function computeScore(signals: Signal[], threatMultBps = THREAT_MULT): De
     const c = s.attackClass;
     if (c >= 8) continue;
     const sw = SOURCE_WEIGHT[s.source] ?? 0;
-    if (s.source < 32) mask[c] |= 1 << s.source;
     let contribution = clamp(s.severityBps);
     contribution = Math.floor((contribution * clamp(s.confidenceBps)) / BPS);
     contribution = Math.floor((contribution * sw) / BPS);
     contribution = Math.floor((contribution * CLASS_WEIGHT[c]) / BPS);
     contribution = Math.floor((contribution * decay(s.ageSecs)) / BPS);
+    // Only a contributing signal counts toward corroboration (mirrors
+    // scoring.rs): a zero-weight source or fully-decayed signal must not forge
+    // a distinct-source corroboration bonus.
+    if (contribution > 0 && s.source < 32) mask[c] |= 1 << s.source;
     agg[c] += contribution;
   }
 
@@ -111,6 +114,28 @@ export function computeScore(signals: Signal[], threatMultBps = THREAT_MULT): De
     tier = 1;
   }
   return { scoreBps, tier, exitFlag, corroboratedClasses };
+}
+
+/** Parallel-array encoding of signals for the on-chain engine / vault ABI. */
+export interface EncodedSignals {
+  sources: number[]; // uint8[]
+  classes: number[]; // uint8[]
+  severitiesBps: bigint[]; // uint256[]
+  confidencesBps: bigint[]; // uint256[]
+  agesSecs: bigint[]; // uint256[]
+}
+
+const toBig = (n: number) => BigInt(Math.max(0, Math.floor(n)));
+
+/** Encode the in-memory signals into the five parallel arrays the contracts take. */
+export function encodeSignals(signals: Signal[]): EncodedSignals {
+  return {
+    sources: signals.map((s) => s.source),
+    classes: signals.map((s) => s.attackClass),
+    severitiesBps: signals.map((s) => toBig(s.severityBps)),
+    confidencesBps: signals.map((s) => toBig(s.confidenceBps)),
+    agesSecs: signals.map((s) => toBig(s.ageSecs)),
+  };
 }
 
 export const THRESHOLDS = { t3Bps: T3, t2Bps: T2 };

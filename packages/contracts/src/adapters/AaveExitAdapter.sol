@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IExitAdapter} from "../interfaces/IExitAdapter.sol";
 import {IAaveV3Pool} from "../interfaces/IAaveV3Pool.sol";
 
@@ -21,7 +22,7 @@ import {IAaveV3Pool} from "../interfaces/IAaveV3Pool.sol";
 ///         the marked integration point (or route through SwapExitAdapter). The
 ///         1:1 underlying == target path is the common "exit to the stablecoin I
 ///         already supplied" case.
-contract AaveExitAdapter is IExitAdapter, Ownable {
+contract AaveExitAdapter is IExitAdapter, Ownable2Step {
     using SafeERC20 for IERC20;
 
     IAaveV3Pool public immutable pool;
@@ -41,7 +42,7 @@ contract AaveExitAdapter is IExitAdapter, Ownable {
     }
 
     /// @inheritdoc IExitAdapter
-    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary)
+    function exit(address sourceAsset, uint256 amount, address targetAsset, address beneficiary, uint256 minOut)
         external
         override
         returns (uint256 proceeds)
@@ -57,6 +58,8 @@ contract AaveExitAdapter is IExitAdapter, Ownable {
 
         // Integration point: if `underlying != targetAsset`, swap here.
         require(underlying == targetAsset, "Aegis/Aave: swap step not configured");
+        // Slippage floor (Aave withdraw is ~1:1, but enforce for consistency).
+        require(proceeds >= minOut, "Aegis/Aave: insufficient output");
         return proceeds;
     }
 

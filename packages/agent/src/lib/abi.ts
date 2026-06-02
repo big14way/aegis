@@ -56,6 +56,7 @@ export const aegisVaultAbi = [
       { name: "severitiesBps", type: "uint256[]" },
       { name: "confidencesBps", type: "uint256[]" },
       { name: "agesSecs", type: "uint256[]" },
+      { name: "minOut", type: "uint256" },
     ],
     outputs: [{ name: "tier", type: "uint8" }],
   },
@@ -63,7 +64,10 @@ export const aegisVaultAbi = [
     type: "function",
     name: "confirmExit",
     stateMutability: "nonpayable",
-    inputs: [{ name: "user", type: "address" }],
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "minOut", type: "uint256" },
+    ],
     outputs: [],
   },
   {

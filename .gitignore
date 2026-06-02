@@ -8,6 +8,7 @@ packages/risk-engine/target/
 packages/contracts/out/
 packages/contracts/cache/
 packages/contracts/broadcast/
+packages/contracts/deployments/
 packages/contracts/lib/
 # env
 .env
@@ -15,3 +16,5 @@ packages/contracts/lib/
 # misc
 .DS_Store
 *.log
+*.tsbuildinfo
+.claude/

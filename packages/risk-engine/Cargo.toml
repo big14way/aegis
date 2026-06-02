@@ -7,6 +7,10 @@ description = "Aegis verifiable risk-scoring + exit-trigger engine (Arbitrum Sty
 repository = "https://github.com/big14way/aegis"
 keywords = ["arbitrum", "stylus", "defi", "agent", "security"]
 
+# Standalone workspace root: prevents Cargo from walking up the directory tree
+# and adopting this crate into an unrelated parent workspace.
+[workspace]
+
 [dependencies]
 # Pinned to the current stable Stylus SDK (released 2026-01-08).
 # stylus-sdk re-exports alloy-primitives and alloy-sol-types, so we depend on

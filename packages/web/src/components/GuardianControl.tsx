@@ -12,6 +12,9 @@ export function GuardianControl({
   onScenario,
   onConfirm,
   onReset,
+  showKeeperFire = false,
+  onKeeperFire,
+  busy = false,
 }: {
   armed: boolean;
   vaultState: "DISARMED" | "ARMED" | "CONFIRM" | "FIRED";
@@ -22,6 +25,9 @@ export function GuardianControl({
   onScenario: (s: Scenario) => void;
   onConfirm: () => void;
   onReset: () => void;
+  showKeeperFire?: boolean;
+  onKeeperFire?: () => void;
+  busy?: boolean;
 }) {
   return (
     <div className="panel p-4 h-full flex flex-col">
@@ -43,8 +49,14 @@ export function GuardianControl({
       </div>
 
       {vaultState === "CONFIRM" && (
-        <button className="btn btn-arm w-full mb-4 animate-pulseRing" onClick={onConfirm}>
+        <button className="btn btn-arm w-full mb-4 animate-pulseRing" onClick={onConfirm} disabled={busy}>
           ▸ Confirm Exit Now
+        </button>
+      )}
+
+      {showKeeperFire && onKeeperFire && (
+        <button className="btn btn-ghost w-full mb-4" onClick={onKeeperFire} disabled={busy}>
+          ⚡ Fire Exit (keeper) — submit verdict on-chain
         </button>
       )}
 
