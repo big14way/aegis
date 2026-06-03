@@ -154,14 +154,15 @@ cd packages/risk-engine && cargo test
 
 ## Deployed addresses
 
-**Live on Arbitrum Sepolia (chain 421614).** The Stylus engine is deployed +
-activated; its on-chain `score()` returns identically to the Solidity engine, and a
-Solidity→Stylus `evaluateAndExit` fired a real bounded exit
-([tx](https://sepolia.arbiscan.io/tx/0x33aa88dc4819236e406fc2402331323447fcb02f3476951ed707261b91116db9)).
+**Live on Arbitrum Sepolia (chain 421614).** The Stylus engine is deployed,
+activated, and **reproducibly verified** (`cargo stylus verify` → *VERIFIED, contract
+matches local project's file hashes*); its on-chain `score()` returns identically to
+the Solidity engine, and a Solidity→Stylus `evaluateAndExit` fired a real bounded exit
+([tx](https://sepolia.arbiscan.io/tx/0x0915d65654ad86e5ccf680edee2ebffa11d7d489ede7856abc1fa557d8e224ff)).
 
 | Contract | Network | Address |
 |---|---|---|
-| **RiskEngine (Stylus, Rust)** ★ | Arbitrum Sepolia | [`0x5F499a51E3755f33c09DdC515df8A017C2C7702f`](https://sepolia.arbiscan.io/address/0x5F499a51E3755f33c09DdC515df8A017C2C7702f) |
+| **RiskEngine (Stylus, Rust)** ★ verified | Arbitrum Sepolia | [`0xdC832Fac3C211E1148D00624c992299B2d954f17`](https://sepolia.arbiscan.io/address/0xdC832Fac3C211E1148D00624c992299B2d954f17) |
 | **AegisVault** (bounded executor) | Arbitrum Sepolia | [`0x8Ac8baCc02F6a605f89D01bCa6d4A500fc525e7E`](https://sepolia.arbiscan.io/address/0x8Ac8baCc02F6a605f89D01bCa6d4A500fc525e7E) |
 | MockExitAdapter | Arbitrum Sepolia | `0xA9F06A78635bBe19d8773D8CdF0F0507838A5A93` |
 | tTSLA (protected asset) | Arbitrum Sepolia | `0xb2D34A309F6751DE08524504f33CC949211a7C62` |

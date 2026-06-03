@@ -403,8 +403,6 @@ const _: () = {
     assert!(Tier::None.as_u8() == 0);
 };
 
-/// `cargo stylus export-abi` entrypoint.
-#[cfg(feature = "export-abi")]
-fn main() {
-    stylus_sdk::abi::export::print_from_args();
-}
+// Note: the `#[public]` macro auto-generates `pub fn print_from_args()` under the
+// `export-abi` feature; the `src/main.rs` bin target calls it. We deliberately do
+// NOT define one here (that would be a duplicate — E0428).
