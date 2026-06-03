@@ -154,14 +154,25 @@ cd packages/risk-engine && cargo test
 
 ## Deployed addresses
 
+**Live on Arbitrum Sepolia (chain 421614).** The Stylus engine is deployed +
+activated; its on-chain `score()` returns identically to the Solidity engine, and a
+Solidity→Stylus `evaluateAndExit` fired a real bounded exit
+([tx](https://sepolia.arbiscan.io/tx/0x33aa88dc4819236e406fc2402331323447fcb02f3476951ed707261b91116db9)).
+
 | Contract | Network | Address |
 |---|---|---|
-| RiskEngine (Stylus) | Robinhood / Arb Sepolia | _filled in at deploy_ |
-| AegisVault | Robinhood / Arb Sepolia | _filled in at deploy_ |
+| **RiskEngine (Stylus, Rust)** ★ | Arbitrum Sepolia | [`0x5F499a51E3755f33c09DdC515df8A017C2C7702f`](https://sepolia.arbiscan.io/address/0x5F499a51E3755f33c09DdC515df8A017C2C7702f) |
+| **AegisVault** (bounded executor) | Arbitrum Sepolia | [`0x8Ac8baCc02F6a605f89D01bCa6d4A500fc525e7E`](https://sepolia.arbiscan.io/address/0x8Ac8baCc02F6a605f89D01bCa6d4A500fc525e7E) |
+| MockExitAdapter | Arbitrum Sepolia | `0xA9F06A78635bBe19d8773D8CdF0F0507838A5A93` |
+| tTSLA (protected asset) | Arbitrum Sepolia | `0xb2D34A309F6751DE08524504f33CC949211a7C62` |
+| USDC (exit target) | Arbitrum Sepolia | `0xa2c0180508D3540e85d97ba7BE1BA61b6510aBc4` |
 | Aave V3 Pool (used) | Arbitrum Sepolia | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` |
-| Chainlink ETH/USD | Arbitrum One | `0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612` |
 | ERC-8004 Identity | Arbitrum Sepolia | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 | ERC-8004 Reputation | Arbitrum Sepolia | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+
+`AegisVault` and the adapter are source-verified on [Sourcify](https://repo.sourcify.dev/contracts/full_match/421614/0x8Ac8baCc02F6a605f89D01bCa6d4A500fc525e7E/).
+Reproduce the Stylus deploy with `bash scripts/deploy-stylus.sh` (see
+[`docs/STYLUS_ACTIVATION.md`](./docs/STYLUS_ACTIVATION.md)).
 
 > **Chain note.** Robinhood Chain testnet (`46630`) is the primary target but has
 > no confirmed DeFi protocols yet, and Stylus enablement there is validated on
