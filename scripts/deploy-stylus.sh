@@ -13,6 +13,10 @@
 set -eo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Auto-load a gitignored deploy env (DEPLOYER_KEY + STYLUS_RPC) if present.
+if [ -f "$ROOT/.env.deploy.local" ]; then
+  set -a; . "$ROOT/.env.deploy.local"; set +a
+fi
 : "${STYLUS_RPC:?set STYLUS_RPC to a Stylus-enabled RPC}"
 : "${DEPLOYER_KEY:?set DEPLOYER_KEY to a funded deployer private key}"
 

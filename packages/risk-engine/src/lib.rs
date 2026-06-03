@@ -23,7 +23,6 @@ use scoring::{compute_score, ScoringConfig, Signal, Tier, BPS, NUM_CLASSES};
 use stylus_sdk::{
     alloy_primitives::{Address, U256},
     alloy_sol_types::sol,
-    evm,
     prelude::*,
 };
 
@@ -115,7 +114,7 @@ impl RiskEngine {
                 .set(U256::from(*w));
         }
 
-        evm::log(Initialized { owner: caller });
+        self.vm().log(Initialized { owner: caller });
         Ok(())
     }
 
@@ -170,7 +169,7 @@ impl RiskEngine {
         )?;
         let cfg = self.load_config();
         let result = compute_score(&signals, &cfg);
-        evm::log(DecisionScored {
+        self.vm().log(DecisionScored {
             score_bps: U256::from(result.score_bps),
             tier: result.tier.as_u8(),
             exit_flag: result.exit_flag,
@@ -328,7 +327,7 @@ impl RiskEngine {
     }
 
     fn emit_config_updated(&self) {
-        evm::log(ConfigUpdated {
+        self.vm().log(ConfigUpdated {
             by: self.vm().msg_sender(),
         });
     }

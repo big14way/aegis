@@ -18,3 +18,4 @@ packages/contracts/lib/
 *.log
 *.tsbuildinfo
 .claude/
+packages/risk-engine/.cargo-cache/

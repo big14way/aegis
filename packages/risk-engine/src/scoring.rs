@@ -59,7 +59,7 @@ pub enum Tier {
 }
 
 impl Tier {
-    pub fn as_u8(self) -> u8 {
+    pub const fn as_u8(self) -> u8 {
         self as u8
     }
 }
