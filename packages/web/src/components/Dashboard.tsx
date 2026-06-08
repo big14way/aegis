@@ -24,11 +24,13 @@ import {
   VAULT_ADDRESS,
 } from "@/lib/wagmi";
 import { aegisVaultAbi, erc20Abi, riskEngineAbi } from "@/lib/abi";
+import { chainNameFor, explorerTxUrl } from "@/lib/explorer";
 import { GuardianStatus } from "./GuardianStatus";
 import { RiskGauge } from "./RiskGauge";
 import { SignalFeed } from "./SignalFeed";
 import { GuardianControl } from "./GuardianControl";
 import { PositionList, type Position } from "./PositionList";
+import { TxHistory, type TxRecord } from "./TxHistory";
 
 const POSITIONS: Position[] = [
   { symbol: "tTSLA", protocol: "Robinhood Chain · Stock Token", amount: 540, usdValue: 182_400 },
@@ -58,6 +60,14 @@ export function Dashboard() {
   const [exitedLatch, setExitedLatch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; hash?: `0x${string}` } | null>(null);
+  const [history, setHistory] = useState<TxRecord[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(localStorage.getItem("aegis_tx_history") ?? "[]") as TxRecord[];
+    } catch {
+      return [];
+    }
+  });
 
   const engineMode = ENGINE_ADDRESS ? "LIVE" : "DEMO";
   const onWrongChain = isConnected && chainId !== CHAIN_ID;
@@ -144,6 +154,27 @@ export function Dashboard() {
     setExitedLatch(false);
   }
 
+  function recordTx(label: string, hash: `0x${string}`) {
+    setHistory((prev) => {
+      const next = [{ label, hash, ts: Date.now(), chainId }, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem("aegis_tx_history", JSON.stringify(next));
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next;
+    });
+  }
+
+  function clearHistory() {
+    setHistory([]);
+    try {
+      localStorage.removeItem("aegis_tx_history");
+    } catch {
+      /* localStorage unavailable */
+    }
+  }
+
   /** Submit a tx and wait for its receipt; surface failures instead of swallowing them. */
   async function send(run: () => Promise<`0x${string}`>, label: string): Promise<boolean> {
     setBusy(true);
@@ -151,6 +182,7 @@ export function Dashboard() {
     try {
       const hash = await run();
       setNotice({ text: `${label} submitted — confirming…`, hash });
+      recordTx(label, hash);
       await publicClient?.waitForTransactionReceipt({ hash });
       setNotice({ text: `${label} confirmed.`, hash });
       return true;
@@ -369,28 +401,13 @@ export function Dashboard() {
       <div className="lg:col-span-4 order-3">
         <SignalFeed signals={signals} corroboratedClasses={decision.corroboratedClasses} />
       </div>
+
+      {/* Full-width: on-chain activity / audit trail */}
+      <div className="lg:col-span-12 order-4">
+        <TxHistory records={history} onClear={clearHistory} />
+      </div>
     </div>
   );
-}
-
-function chainNameFor(id: number): string {
-  if (id === 31337) return "Anvil (local)";
-  if (id === 421614) return "Arbitrum Sepolia";
-  if (id === 46630) return "Robinhood Chain";
-  return `Chain ${id}`;
-}
-
-/** Block-explorer tx URL for the connected chain (null when there's no explorer). */
-function explorerTxUrl(id: number, hash: `0x${string}`): string | null {
-  const base =
-    id === 421614
-      ? "https://sepolia.arbiscan.io"
-      : id === 42161
-        ? "https://arbiscan.io"
-        : id === 46630
-          ? "https://explorer.testnet.chain.robinhood.com"
-          : null;
-  return base ? `${base}/tx/${hash}` : null;
 }
 
 function Mini({ label, value }: { label: string; value: string }) {
