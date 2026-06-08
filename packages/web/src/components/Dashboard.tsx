@@ -38,6 +38,11 @@ const POSITIONS: Position[] = [
 const KEEPER_ROLE = keccak256(toBytes("KEEPER_ROLE"));
 const CAP_WEI = 1000n * 10n ** 18n; // per-exit cap (matches the seeded position)
 const WINDOW_SECS = 600;
+// Arbitrum Sepolia's base fee is tiny (~0.02 gwei) but fluctuates, and wallets
+// sometimes estimate maxFeePerGas just under it ("max fee per gas less than block
+// base fee"). Suggest a generous ceiling — you still only pay the real base fee,
+// so the high cap costs nothing but avoids the race.
+const GAS_OVERRIDE = { maxFeePerGas: 200_000_000n, maxPriorityFeePerGas: 1_000_000n };
 
 export function Dashboard() {
   const { address, isConnected } = useAccount();
@@ -177,6 +182,7 @@ export function Dashboard() {
             abi: erc20Abi,
             functionName: "approve",
             args: [VAULT_ADDRESS as `0x${string}`, maxUint256],
+            ...GAS_OVERRIDE,
           }),
         "Approve allowance",
       );
@@ -195,6 +201,7 @@ export function Dashboard() {
             CAP_WEI,
             BigInt(WINDOW_SECS),
           ],
+          ...GAS_OVERRIDE,
         }),
       "Arm guard",
     );
@@ -225,7 +232,14 @@ export function Dashboard() {
     setExitedLatch(false);
     if (canWrite) {
       void send(
-        () => writeContractAsync({ address: VAULT_ADDRESS as `0x${string}`, abi: aegisVaultAbi, functionName: "disarm", args: [] }),
+        () =>
+          writeContractAsync({
+            address: VAULT_ADDRESS as `0x${string}`,
+            abi: aegisVaultAbi,
+            functionName: "disarm",
+            args: [],
+            ...GAS_OVERRIDE,
+          }),
         "Disarm",
       );
     }
@@ -248,6 +262,7 @@ export function Dashboard() {
             abi: aegisVaultAbi,
             functionName: "confirmExit",
             args: [(PROTECTED_USER || address) as `0x${string}`, 0n],
+            ...GAS_OVERRIDE,
           }),
         "Confirm exit",
       );
@@ -273,6 +288,7 @@ export function Dashboard() {
             encoded.agesSecs,
             0n,
           ],
+          ...GAS_OVERRIDE,
         }),
       "Keeper evaluateAndExit",
     );
