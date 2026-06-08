@@ -98,4 +98,5 @@ Architected chain-agnostically and dual-deployed:
 Stylus availability on RHC is validated on day one with
 `cargo stylus check --endpoint=<RHC RPC>`; if it is not yet enabled there, the
 engine deploys on Arbitrum Sepolia and the vault on either chain reads it. See
-`docs/LOCAL_SETUP.md`.
+[`STYLUS_ACTIVATION.md`](./STYLUS_ACTIVATION.md) for the reproducible deploy + verify
+runbook, and the root [`README`](../README.md) for the live addresses and quickstart.
