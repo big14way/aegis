@@ -116,6 +116,22 @@ export const aegisVaultAbi = [
       { name: "agentId", type: "uint256", indexed: false },
     ],
   },
+  // Custom errors — so viem can decode the revert reason instead of showing blank.
+  { type: "error", name: "EngineNotSet", inputs: [] },
+  { type: "error", name: "NotArmed", inputs: [] },
+  { type: "error", name: "AdapterNotAllowed", inputs: [] },
+  { type: "error", name: "NothingToExit", inputs: [] },
+  { type: "error", name: "NotAuthorized", inputs: [] },
+  { type: "error", name: "NoOpenWindow", inputs: [] },
+  { type: "error", name: "ZeroAddress", inputs: [] },
+  {
+    type: "error",
+    name: "InsufficientProceeds",
+    inputs: [
+      { name: "proceeds", type: "uint256" },
+      { name: "minOut", type: "uint256" },
+    ],
+  },
 ] as const;
 
 export const riskEngineAbi = [

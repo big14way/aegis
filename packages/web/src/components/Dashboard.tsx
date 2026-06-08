@@ -52,7 +52,7 @@ export function Dashboard() {
   const [confirmed, setConfirmed] = useState(false);
   const [exitedLatch, setExitedLatch] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; hash?: `0x${string}` } | null>(null);
 
   const engineMode = ENGINE_ADDRESS ? "LIVE" : "DEMO";
   const onWrongChain = isConnected && chainId !== CHAIN_ID;
@@ -96,9 +96,10 @@ export function Dashboard() {
     abi: aegisVaultAbi,
     eventName: "Exited",
     enabled: engineMode === "LIVE" && !!VAULT_ADDRESS,
-    onLogs: () => {
+    onLogs: (logs) => {
       setExitedLatch(true);
-      setNotice("Exit fired on-chain — position consolidated to USDC.");
+      const hash = logs?.[0]?.transactionHash as `0x${string}` | undefined;
+      setNotice({ text: "Exit fired on-chain — position consolidated to USDC.", hash });
     },
   });
 
@@ -138,14 +139,18 @@ export function Dashboard() {
   /** Submit a tx and wait for its receipt; surface failures instead of swallowing them. */
   async function send(run: () => Promise<`0x${string}`>, label: string): Promise<boolean> {
     setBusy(true);
-    setNotice(`${label}…`);
+    setNotice({ text: `${label}…` });
     try {
       const hash = await run();
+      setNotice({ text: `${label} submitted — confirming…`, hash });
       await publicClient?.waitForTransactionReceipt({ hash });
-      setNotice(`${label} confirmed.`);
+      setNotice({ text: `${label} confirmed.`, hash });
       return true;
     } catch (err) {
-      setNotice(`${label} failed: ${(err as Error).message.split("\n")[0]}`);
+      const e = err as { shortMessage?: string; message?: string };
+      const reason = e.shortMessage ?? e.message?.split("\n").slice(0, 3).join(" ") ?? "unknown error";
+      setNotice({ text: `${label} failed: ${reason}` });
+      console.error(`[aegis] ${label} failed:`, err);
       return false;
     } finally {
       setBusy(false);
@@ -196,12 +201,12 @@ export function Dashboard() {
     setNotice(null);
     if (engineMode === "LIVE") {
       if (onWrongChain) {
-        setNotice(`Wrong network — switch to chain ${CHAIN_ID}.`);
+        setNotice({ text: `Wrong network — switch to chain ${CHAIN_ID}.` });
         switchChain?.({ chainId: CHAIN_ID });
         return;
       }
       if (!canWrite) {
-        setNotice("Connect a wallet on the right network to arm on-chain.");
+        setNotice({ text: "Connect a wallet on the right network to arm on-chain." });
         return;
       }
       const ok = await armLive();
@@ -294,7 +299,19 @@ export function Dashboard() {
       <div className="lg:col-span-5 order-1 lg:order-2 space-y-4">
         <GuardianStatus vaultState={vaultState} engineMode={engineMode} chainName={chainNameFor(chainId)} />
         {notice && (
-          <div className="panel px-4 py-2 font-mono text-[10px] text-bone-faint border-l-2 border-amber/60">{notice}</div>
+          <div className="panel px-4 py-2 font-mono text-[10px] text-bone-faint border-l-2 border-amber/60 flex items-center justify-between gap-3">
+            <span>{notice.text}</span>
+            {notice.hash && explorerTxUrl(chainId, notice.hash) && (
+              <a
+                href={explorerTxUrl(chainId, notice.hash)!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber hover:underline whitespace-nowrap"
+              >
+                view tx ↗
+              </a>
+            )}
+          </div>
         )}
         {engineMode === "LIVE" && onWrongChain && (
           <button
@@ -338,6 +355,19 @@ function chainNameFor(id: number): string {
   if (id === 421614) return "Arbitrum Sepolia";
   if (id === 46630) return "Robinhood Chain";
   return `Chain ${id}`;
+}
+
+/** Block-explorer tx URL for the connected chain (null when there's no explorer). */
+function explorerTxUrl(id: number, hash: `0x${string}`): string | null {
+  const base =
+    id === 421614
+      ? "https://sepolia.arbiscan.io"
+      : id === 42161
+        ? "https://arbiscan.io"
+        : id === 46630
+          ? "https://explorer.testnet.chain.robinhood.com"
+          : null;
+  return base ? `${base}/tx/${hash}` : null;
 }
 
 function Mini({ label, value }: { label: string; value: string }) {
