@@ -104,11 +104,14 @@ export function Dashboard() {
   });
 
   // Latch FIRED so the gauge can keep decaying without un-firing the exit.
+  // DEMO latches on the local verdict; LIVE waits for the real on-chain `Exited`
+  // event (above) so the keeper-fire button stays available until the exit
+  // actually fires on-chain.
   useEffect(() => {
-    if (armed && (decision.exitFlag || confirmed) && !exitedLatch) {
+    if (engineMode === "DEMO" && armed && (decision.exitFlag || confirmed) && !exitedLatch) {
       setExitedLatch(true);
     }
-  }, [armed, decision.exitFlag, confirmed, exitedLatch]);
+  }, [engineMode, armed, decision.exitFlag, confirmed, exitedLatch]);
 
   // Live signal decay: age every signal by 1s so the console feels alive.
   useEffect(() => {
