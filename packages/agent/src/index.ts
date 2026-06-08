@@ -24,6 +24,19 @@ import type { Hex } from "viem";
 
 let latest: { scoreBps: number; tier: number } | null = null;
 
+/** Block-explorer tx link for the configured chain (empty string if none). */
+function explorerTx(hash: string): string {
+  const base =
+    config.CHAIN_ID === 421614
+      ? "https://sepolia.arbiscan.io"
+      : config.CHAIN_ID === 42161
+        ? "https://arbiscan.io"
+        : config.CHAIN_ID === 46630
+          ? "https://explorer.testnet.chain.robinhood.com"
+          : "";
+  return base ? `${base}/tx/${hash}` : "";
+}
+
 async function gatherSignals(engine: EngineClient): Promise<RawSignal[]> {
   const signals: RawSignal[] = [];
 
@@ -75,9 +88,11 @@ async function tick(engine: EngineClient, executor: ExecutorClient | null, bot: 
       const verb = decision.exitFlag ? "🔴 EXIT FIRED" : "🟠 CONFIRMATION REQUESTED";
       console.log(`[exec] ${verb} tx=${hash}`);
       if (bot) {
+        const link = explorerTx(hash);
         await pushAlert(
           bot,
           `${verb}\nScore *${(decision.scoreBps / 100).toFixed(1)}%* (tier ${tierLabel(decision.tier)})\nTx: \`${hash}\`` +
+            (link ? `\n[View on explorer ↗](${link})` : "") +
             (decision.exitFlag ? "" : "\nReply /confirm to exit now."),
         );
       }
