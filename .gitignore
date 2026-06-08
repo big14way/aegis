@@ -19,3 +19,5 @@ packages/contracts/lib/
 *.tsbuildinfo
 .claude/
 packages/risk-engine/.cargo-cache/
+# local-only — never commit (private demo/video material)
+DEMO_VIDEO_SCRIPT.md
