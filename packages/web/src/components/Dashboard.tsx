@@ -255,7 +255,7 @@ export function Dashboard() {
   async function handleConfirm() {
     setConfirmed(true);
     if (canWrite) {
-      await send(
+      const ok = await send(
         () =>
           writeContractAsync({
             address: VAULT_ADDRESS as `0x${string}`,
@@ -266,6 +266,7 @@ export function Dashboard() {
           }),
         "Confirm exit",
       );
+      if (ok) setExitedLatch(true);
     }
   }
 
@@ -273,7 +274,7 @@ export function Dashboard() {
    *  re-derives the verdict via the engine and fires the bounded exit. */
   async function handleKeeperFire() {
     if (!canWrite) return;
-    await send(
+    const ok = await send(
       () =>
         writeContractAsync({
           address: VAULT_ADDRESS as `0x${string}`,
@@ -292,6 +293,9 @@ export function Dashboard() {
         }),
       "Keeper evaluateAndExit",
     );
+    // On an auto-fire verdict the exit fired in this very tx — reflect FIRED now,
+    // rather than depending on the (public-RPC-flaky) event watcher.
+    if (ok && decision.exitFlag) setExitedLatch(true);
   }
 
   return (
