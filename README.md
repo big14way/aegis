@@ -8,7 +8,7 @@
 
 *Arbitrum Open House — London Buildathon 2026 · AI Agentic + Open tracks*
 
-### ▶️ [Watch the 4-minute demo](https://youtu.be/xRSPOUcyjmg)
+### 🌐 [Try the live app](https://aegissafe.vercel.app) · ▶️ [Watch the 4-minute demo](https://youtu.be/xRSPOUcyjmg)
 
 [Live on Arbitrum Sepolia](#-live-on-arbitrum-sepolia--verified) ·
 [How it works](#how-it-works) ·
