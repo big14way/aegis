@@ -11,6 +11,7 @@
 ### 🌐 [Try the live app](https://aegissafe.vercel.app) · ▶️ [Watch the 4-minute demo](https://youtu.be/xRSPOUcyjmg)
 
 [Live on Arbitrum Sepolia](#-live-on-arbitrum-sepolia--verified) ·
+[Live on Robinhood Chain](#-also-live-on-robinhood-chain--verified) ·
 [How it works](#how-it-works) ·
 [Why Stylus](#why-arbitrum-stylus-the-headline) ·
 [Quickstart](#quickstart) ·
@@ -139,12 +140,34 @@ and a Solidity→Stylus `evaluateAndExit` fired a real bounded exit
 open it on Arbiscan and you'll see the vault's internal call into the Stylus engine and
 the USDC landing in the user's wallet. *Don't trust us — verify.*
 
+## 🟣 Also live on Robinhood Chain · verified
+
+The same Stylus engine is **deployed, activated, and `cargo stylus verify`-VERIFIED on
+Robinhood Chain testnet** (Arbitrum Orbit L2, chain `46630`, ArbOS 116 / Stylus v3) —
+where it guards a **real Robinhood Chain Stock Token:** tokenized Tesla (`tTSLA`), minted
+to the protected wallet from the official faucet.
+
+| Contract | Address |
+|---|---|
+| **RiskEngine (Stylus, Rust)** ★ *verified* | [`0xcd529F43bBA9be57f3e61Cc5070A7f03F5F23f4a`](https://explorer.testnet.chain.robinhood.com/address/0xcd529F43bBA9be57f3e61Cc5070A7f03F5F23f4a) |
+| **AegisVault** (bounded executor) | [`0x199516b47F1ce8C77617b58526ad701bF1f750FA`](https://explorer.testnet.chain.robinhood.com/address/0x199516b47F1ce8C77617b58526ad701bF1f750FA) |
+| Protected asset — **real tTSLA Stock Token** | [`0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E`](https://explorer.testnet.chain.robinhood.com/address/0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E) |
+| MockExitAdapter · USDC (exit target) | `0x4f33…80DC` · `0x4adD…aae1` |
+
+**Proof it's real:** a keeper called `evaluateAndExit`, which made a live **Solidity→Stylus**
+call into the engine (verdict **100% / tier-3 / auto-fire**) and fired a **bounded** exit —
+exactly **2 of the wallet's 5** tTSLA were swapped to USDC and delivered to the user, the
+other **3 left untouched** by the on-chain cap
+([tx](https://explorer.testnet.chain.robinhood.com/tx/0xb9cf7d86268721022a76d0d44f4b6478085a51f5f7b4cc18d749fffef311e891)).
+Open it on the explorer and you'll see the vault's internal call into the Stylus engine,
+the bounded tTSLA pulled, and the proceeds landing in the wallet.
+
 ## Sponsor integrations
 
 | Sponsor | How Aegis uses it | Where |
 |---|---|---|
 | **Arbitrum Stylus** | The entire risk-scoring + exit-decision engine (Rust), reproducibly verified | `packages/risk-engine` |
-| **Robinhood Chain** | Primary RWA target — tokenized Stock Tokens are the protected positions (1,997 already live on Arbitrum) | `SwapExitAdapter`, chain configs |
+| **Robinhood Chain** | **Engine + bounded vault deployed & `cargo stylus verify`-VERIFIED on RHC testnet (46630); guards a real tokenized Stock Token (tTSLA) and fired a live bounded exit.** Primary RWA target — 1,997 tokenized stocks already live | `script/DeployRHC.s.sol`, `packages/risk-engine`, chain configs |
 | **Chainlink** | Trustless on-chain oracle-deviation signal + L2 sequencer-uptime guard, deviation computed *inside* the Stylus engine | `AegisVault.checkOracle`, `agent/signals/chainlink.ts` |
 | **ERC-8004** | Register the guardian's on-chain identity; write portable exit-outcome reputation | `agent/src/erc8004` |
 | **x402** | Paid "priority exit" endpoint (USDC settlement over HTTP 402) | `agent/src/x402` |
@@ -206,7 +229,7 @@ aegis/
 
 ## Roadmap
 
-- **Mainnet + Robinhood Chain** — protect real tokenized equities and Aave/RWA positions; swap the `LocalRiskEngine` for the verified Stylus engine (one address).
+- **Mainnet** — Robinhood Chain *testnet* is already live & verified (above); next is protecting real tokenized equities and Aave/RWA positions on mainnet, swapping the `LocalRiskEngine` for the verified Stylus engine (one address).
 - **Real exit routing** — live Uniswap-v3 + Aave-unwind adapters with on-chain slippage floors; multi-hop / best-route consolidation.
 - **Scoped keeper keys** — ERC-7715 session keys (MetaMask Delegation Toolkit) so the keeper is cryptographically bounded, not just role-gated.
 - **ERC-8004 reputation market** — guardians compete on a portable, on-chain track record; underwriters price cover off verifiable exit history.
