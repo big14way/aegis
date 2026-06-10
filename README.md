@@ -8,6 +8,8 @@
 
 *Arbitrum Open House — London Buildathon 2026 · AI Agentic + Open tracks*
 
+### ▶️ [Watch the 4-minute demo](https://youtu.be/xRSPOUcyjmg)
+
 [Live on Arbitrum Sepolia](#-live-on-arbitrum-sepolia--verified) ·
 [How it works](#how-it-works) ·
 [Why Stylus](#why-arbitrum-stylus-the-headline) ·
@@ -31,6 +33,15 @@ and yank your funds the instant a threat corroborates. It works: firms like Hype
 report **$2B+ in prevented losses**. But every one of these systems makes the
 **"should I exit?"** decision inside an **opaque, off-chain backend**. You are handing
 code you cannot see, audit, or reproduce the authority to move your money.
+
+> **Meet Maya** *(the protagonist of our [demo](https://youtu.be/xRSPOUcyjmg))* — she's not
+> a trader; she just moved some savings into **tokenized stocks** on-chain because that
+> market never closes. One night, a protocol her assets touch is exploited by a
+> flash-loan attack. The people who were awake got out in minutes. **Maya was asleep —
+> and woke up to nothing.** Aegis is the guardian that would have saved her: it sees the
+> threat, *proves* the verdict on-chain in Stylus, and exits her position to USDC —
+> capped, non-custodial — before she opens her eyes, then pings her on Telegram. The demo
+> follows Maya's guardian doing exactly that, live on Arbitrum.
 
 Two things must be true for an autonomous guardian to be trustworthy, and today's
 designs get neither:
